@@ -2,6 +2,7 @@
 library(ggplot2)
 library(tree)
 library(party)
+library(leaps)
 
 #2. Data Extract & Clean
 
@@ -44,14 +45,14 @@ train_dat1$timeframe = as.factor(ifelse(train_dat1$HH %in% 6:15, "day",
 # 280477    47793     4354 
 
 train_dat1$family = as.factor(ifelse(train_dat1$group_size >= 2 
-                                            & train_dat1$married_couple==1, "Y", "N"))
+                                     & train_dat1$married_couple==1, "Y", "N"))
 
 # nrow(train_dat1[train_dat1$family=="Y",])
 # 59657
 
 train_dat1$family_w_kids = as.factor(ifelse(train_dat1$group_size > 2 
-                                              & train_dat1$married_couple==1 
-                                                & train_dat1$age_youngest<=21 , "Y", "N"))
+                                            & train_dat1$married_couple==1 
+                                            & train_dat1$age_youngest<=21 , "Y", "N"))
 
 # nrow(train_dat1[train_dat1$family_w_kids=="Y",])
 # 2801
@@ -98,8 +99,8 @@ risk$family_w_kids = ifelse(risk$family_w_kids=="Y",1,0)
 
 risk$risk_factor = ifelse(risk$risk_factor=="1",1,
                           ifelse(risk$risk_factor=="2",2,
-                          ifelse(risk$risk_factor=="3",3,
-                          ifelse(risk$risk_factor=="4",4,NA))))
+                                 ifelse(risk$risk_factor=="3",3,
+                                        ifelse(risk$risk_factor=="4",4,NA))))
 
 norisk$risk_factor = as.numeric(norisk$risk_factor)
 # str(norisk)
@@ -124,28 +125,76 @@ norisk$family_w_kids = ifelse(norisk$family_w_kids=="Y",1,0)
 # plot(prune_mod)
 # text(prune_mod)
 
-# hx_lm = lm(risk$risk_factor ~  risk$single+
-#                                 risk$family+
-#                                 risk$family_w_kids+
-#                                 risk$homeowner+
-#                                 risk$married_couple)
-#           
-# summary(hx_lm)
+risk$state_cat = ifelse(risk$state %in% c("ID","NY","FL"),1,
+                        ifelse(risk$state %in% c("DC","UT","WI","CO","KY","MS","OH","TN"),3,2))
+
+risk$car_val_sig = ifelse(risk$car_value %in% c("g","h","i"),1,0)
+
+hx_lm = lm(risk$risk_factor ~  risk$married_couple+
+                                risk$family+
+                                risk$age_oldest+
+                                risk$age_youngest+
+                                risk$state+
+                                risk$duration_previous+
+                                risk$car_age+
+                                risk$car_value+
+                                risk$car_val_sig+
+                                risk$homeowner,data=risk)
+                                #risk$married_couple)
+          
+summary(hx_lm)
 # 
 # RMSE <- sqrt(mean((risk$risk_factor-hx$fitted.values)^2))
 
-hx_tree = ctree(risk$risk_factor ~  risk$single+
-                                risk$family+
-                                risk$family_w_kids+
-                                risk$homeowner+
-                                risk$married_couple)
+hx_tree = ctree(risk$risk_factor ~  risk$state)
 
 plot (hx_tree, main="Conditional Inference Tree")  # the ctree
 
+
+#############Prediction###############
+
+pred.response.lm = as.character(hx_lm$fitted.values,data=risk)
+input.response.lm = as.character (risk$risk_factor) # actuals
+#View(cbind(input.response.lm,substr(pred.response.lm,1,1)))
+mean (input.response.lm != substr(pred.response.lm,1,1)) # misclassification %
+
 pred.response = as.character(predict(hx_tree),data=risk) # predict on test data
-
 input.response = as.character (risk$risk_factor) # actuals
+View(cbind(input.response,substr(pred.response,1,1)))
+mean (input.response != substr(pred.response,1,1)) # misclassification %
 
-View(cbind(input.response,pred.response))
 
-mean (input.response != pred.response) # misclassification %
+View(risk)
+
+
+############################ Independent model on recods with a risk factor#################################
+
+lm_risk = lm(risk$cost ~ risk$car_age+
+                          #risk$car_value+
+                          #risk$car_age+
+                          risk$risk_factor+
+                          risk$duration_previous+
+                          risk$weekend+
+                          risk$timeframe+
+                          risk$single+
+                          risk$state_cat+
+                          risk$family,data=risk)
+
+summary(lm_risk)
+
+leaps<-regsubsets(risk$cost ~ risk$car_age+
+                    #risk$car_value+
+                    risk$car_age+
+                    risk$risk_factor+
+                    risk$duration_previous+
+                    risk$weekend+
+                    risk$timeframe+
+                    risk$single+
+                    risk$state_cat+
+                    risk$family,data=risk,nbest=10)
+
+summary(leaps)
+
+plot(leaps,scale="r2")
+
+subsets(leaps, statistic="rsq")
