@@ -1,2 +1,2 @@
-# cu_analytics
-bana 6660 predictive analytics
+# Predictive Analytics practicum
+This repository maintains all code written towards completion of assignments and projects.
