@@ -103,8 +103,11 @@ data$family_w_kids = as.factor(ifelse(data$group_size > 2
 
 ```  
 
-**Convert the homeowner indicator  
-#data$homeowner = ifelse(data$homeowner=="1",1,0)  
+**Convert the homeowner indicator:**  
+```{r}
+data$homeowner = ifelse(data$homeowner=="1","Y","N") 
+```  
+ 
 
 **Convert risk factor into a numerical variable:**  
 The risk factor is an ordinal number based on the information provided. Converting the risk factor to a discrete numerical variable will aid the model building process as discussed further down below.  
@@ -207,9 +210,9 @@ dim(data_wo_NA)
 
 The above dimensions indicate that the combined dataset, **data_wo_NA**, now has the same number of rows as the original. This will be the dataframe for further predictions.  
 
-  
-  
-Using a correlation matrix, we selected variables with high correlation with the response variable, Cost. Additionally, we performed EDA for the non-numeric variables in Tableau. Below are the plots demonstrating interesting correlations:  
+### **Modelling the response - COST**  
+
+A multiple linear regression model was selected to predict the cost at a line level. Using a correlation matrix, we selected variables with high correlation with the response variable. Additionally, we performed EDA for the non-numeric variables in Tableau. Below are the plots demonstrating interesting correlations:  
 
 
 # pic: Cost by weekend
@@ -218,7 +221,7 @@ Using a correlation matrix, we selected variables with high correlation with the
 # pic: Cost by time
 # pic: Cost by risk factor (Courtney needs complete dataset)  
 
-The following multiple linear regression model was chosen to predict the response, **COST**:  
+The following multiple linear regression model was chosen to predict the response, **COST**. The EDA demonstrated a very strong interaction between a few features, hence, interaction terms were introduced to improve ability to capture the variability in the response.
 
 
 ```{r}
@@ -240,7 +243,11 @@ lm_cost = lm (cost ~  risk_factor+
 
 summary(lm_cost)
 
-```
+```  
 
 
-
+### **Significant Inferences from the model:**  
+####_Assuming all other variables remain constant_  
+1. A higher car value (g,h,i) increases the cost.  
+2. Cost of the policy may potentially be lower for homeowners.  
+3. The cost of a policy is higher over the weekend.  
