@@ -43,7 +43,7 @@ The interesting correlations in the matrix were:
 library(ggplot2)
 library(tree)
 library(party)
-library(leaps)
+
 ```  
 
 
@@ -73,13 +73,16 @@ data$C_previous = as.factor(data$C_previous)
 data$weekend = as.factor(ifelse(data$day %in% 0:4, "N", "Y"))
 ```  
 
-**Timeframe:**  Variable to determine whether the time of transaction is during core business hours.  
+**Timeframe:**  Variable to determine whether the time of transaction is during core business hours. 
+
+**Figure-Median Cost by Time:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyTime.png)  
+
+The above visual provided sufficient insight into the need for deriving a new timeframe feature indicating whether the transaction occurred during business hours of 8am through 5pm.  
 
 ```{r}
 data$HH = as.integer(sub(":.*", "", data$time)) #get the HOUR from TIME and convert to INTEGER
 data$timeframe = as.factor(ifelse(data$HH %in% 8:17, "bus_hours","non_bus_hours"))
 ```  
-## pic why split  
 
 **Group features:**  A set of derived flags to determine whether the customer is an individual or group.  
 
@@ -141,13 +144,12 @@ data$duration_previous[is.na(data$duration_previous)] = 0
 
 **_Filling risk_factor:_**  Per our correlation matrix, the risk factor variable is not highly correlated with any single predictor variable. Considering the risk factor is an ordinal numerical variable, a multiple linear regression model was used to predict the missing values and ROUNDED to the nearest integer. The predictor variables were determined via Exploratory Data Analysis, the visuals of which are as follows:  
 
-#Categorize State based on classification tree  
+**Figure-Risk Factor Distribution by State:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\RiskFactorDistributionbyState.png)  
 
-# pic: risk factor distribution by state  
-# pic: risk factor distribution by age youngest  
-# pic: classification tree by state  
+**Figure-Risk Factor Distribution by Age:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\RiskFactorbyAgeYoungDistribution.png)  
 
-Let us begin by first splitting the dataset into two - records with risk-factor and without risk-factor:  
+
+Let us begin by first splitting the dataset in two : records with risk-factor and without risk-factor.  
 
 ```{r}
 risk <- data[!is.na(data$risk_factor), ]
@@ -155,17 +157,19 @@ norisk <- data[is.na(data$risk_factor), ]
 
 hx_tree = ctree(risk$risk_factor ~  risk$state) #Classification tree relating risk factor and state
 
-plot (hx_tree, main="Conditional Inference Tree")  # the ctree
+#plot (hx_tree, main="Classification Tree-Risk Factor vs State",asp=0.5)  # the ctree
 
 ```  
+
+**Figure-Classification tree Risk Factor by State:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\class_tree.png)  
 
 Based on the above classification tree, we can derive a new feature categorizing the states into low, medium and high risk factors.  
 
 
 ```{r}
 
-data$state_cat = ifelse(data$state %in% c("ID","NY","FL"),"low",
-                        ifelse(data$state %in% c("DC","UT","WI","CO","KY","MS","OH","TN"),"high","medium"))
+data$state_cat = ifelse(data$state %in% c("ID","NY","FL"),"l1",
+                        ifelse(data$state %in% c("DC","UT","WI","CO","KY","MS","OH","TN"),"l3","l2"))
 
 risk <- data[!is.na(data$risk_factor), ]
 norisk <- data[is.na(data$risk_factor), ]
@@ -214,12 +218,14 @@ The above dimensions indicate that the combined dataset, **data_wo_NA**, now has
 
 A multiple linear regression model was selected to predict the cost at a line level. Using a correlation matrix, we selected variables with high correlation with the response variable. Additionally, we performed EDA for the non-numeric variables in Tableau. Below are the plots demonstrating interesting correlations:  
 
+**Figure-Cost by weekday/weekend:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyTime-Shop_weekendvsweekday.png)  
 
-# pic: Cost by weekend
-# pic: Cost by State
-# pic: Cost by Car Value
-# pic: Cost by time
-# pic: Cost by risk factor (Courtney needs complete dataset)  
+**Figure-Cost by State:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyState.png)  
+
+**Figure-Cost by Car Value:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyCarValue.png) 
+
+**Figure-Cost by Time of day:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyTime.png) 
+
 
 The following multiple linear regression model was chosen to predict the response, **COST**. The EDA demonstrated a very strong interaction between a few features, hence, interaction terms were introduced to improve ability to capture the variability in the response.
 
@@ -246,7 +252,7 @@ summary(lm_cost)
 ```  
 
 
-### **Significant Inferences from the model:**  
+## **Significant Inferences from the model:**  
 ####_Assuming all other variables remain constant_  
 1. A higher car value (g,h,i) increases the cost.  
 2. Cost of the policy may potentially be lower for homeowners.  
