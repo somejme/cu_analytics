@@ -236,14 +236,17 @@ lm_cost = lm (cost ~  risk_factor+
                       car_age*car_value+
                       risk_factor*state+
                       risk_factor*homeowner+
-                      age_oldest+
-                      age_youngest+
+                      risk_factor*age_oldest+
+                      risk_factor*age_youngest+
+                      risk_factor*family+
                       family+
                       family*family_w_kids+
-                      timeframe+
+                      family*homeowner+
+                      #timeframe+
                       weekend+
-                      C_previous+
+                      duration_previous+
                       C_previous*duration_previous+
+                      car_value*homeowner+
                       homeowner, data = data_wo_NA)
 
 
