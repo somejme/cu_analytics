@@ -18,7 +18,7 @@ str(data)
 
 **_Pairwise correlation matrix:_** 
 
-The correlation matrix below demonstrates that the correlation between the response variabe, cost, and the predictors is extremely low.
+The correlation matrix below demonstrates that the correlation between the response variable, cost, and the predictors is extremely low.
 
 ```{r}
 cor(data[,c(2,3,4,5,8,9,10,11,13,14,15,16,17,18,19)],use="pairwise",method="spearman")
@@ -129,7 +129,7 @@ sapply(data, function(x) sum(is.na(x)))
 ```  
 
 _The missing values need to be filled in the dataframe to prevent the model from eliminating such rows. Hence, further EDA work was performed to logically deduce these values instead of arbitrarily filling them with random/average values._  
-**_Filling C_Previous:_**  Adding an extra level - "Unknown" to fill NA values for C_previous. It was also observed that the duration_previous was always an NA when the C_previous was NA. 
+**_Filling C_Previous:_**  Adding an extra level - "Unknown" to fill NA values for C_previous. It was also observed that the duration_previous was always an NA when the C_previous was NA, and vice-versa. 
 
 ```{r}
 levels(data$C_previous) <- c("1", "2", "3", "4", "Unknown")
