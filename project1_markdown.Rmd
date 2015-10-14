@@ -259,4 +259,76 @@ summary(lm_cost)
 ####_Assuming all other variables remain constant_  
 1. A higher car value (g,h,i) increases the cost.  
 2. Cost of the policy may potentially be lower for homeowners.  
-3. The cost of a policy is higher over the weekend.  
+3. The cost of a policy is higher over the weekend.
+
+
+## **Predicting Cost Vector for test dataset:**  
+
+```{r}
+test_dat1_no_y = read.csv("C:/Users/sayooj/SkyDrive/Documents/UC Denver/Fall 2015/Predictive Analytics/Project1/test_dat1_no_y.csv")
+
+test_data = test_dat1_no_y
+
+dim(test_data)
+
+```  
+
+### **Feature-engineering for test dataset**  
+
+```{r}
+test_data$X = as.factor(test_data$X)
+test_data$customer_ID = as.factor(test_data$customer_ID)
+test_data$shopping_pt = as.factor(test_data$shopping_pt)
+test_data$record_type = as.factor(test_data$record_type)
+test_data$day = as.factor(test_data$day)
+test_data$location = as.factor(test_data$location)
+test_data$homeowner = as.factor(test_data$homeowner)
+test_data$risk_factor = as.factor(test_data$risk_factor) ##in-doubt
+test_data$married_couple = as.factor(test_data$married_couple)
+test_data$C_previous = as.factor(test_data$C_previous)
+
+test_data$weekend = as.factor(ifelse(test_data$day %in% 0:4, "N", "Y"))
+
+test_data$HH = as.integer(sub(":.*", "", test_data$time)) #get the HOUR from TIME and convert to INTEGER
+test_data$timeframe = as.factor(ifelse(test_data$HH %in% 8:17, "bus_hours","non_bus_hours"))
+
+test_data$age_diff = test_data$age_oldest-test_data$age_youngest
+
+test_data$single = as.factor(ifelse(test_data$age_diff==0 & test_data$group_size==1,
+                                     "Y", "N"))
+
+test_data$family = as.factor(ifelse(test_data$group_size >= 2 
+                                     & test_data$married_couple==1, "Y", "N"))
+
+
+test_data$family_w_kids = as.factor(ifelse(test_data$group_size > 2 
+                                            & test_data$married_couple==1 
+                                            & test_data$age_youngest<=21 , "Y", "N"))
+
+test_data$homeowner = ifelse(test_data$homeowner=="1","Y","N") 
+
+test_data$risk_factor = ifelse(test_data$risk_factor=="1",1,
+                          ifelse(test_data$risk_factor=="2",2,
+                                 ifelse(test_data$risk_factor=="3",3,
+                                        ifelse(test_data$risk_factor=="4",4,NA))))
+
+levels(test_data$C_previous) <- c("1", "2", "3", "4", "Unknown")
+test_data$C_previous[is.na(test_data$C_previous)] = "Unknown"
+test_data$duration_previous[is.na(test_data$duration_previous)] = 0
+
+
+test_data$state_cat = ifelse(test_data$state %in% c("ID","NY","FL"),"l1",
+                        ifelse(test_data$state %in% c("DC","UT","WI","CO","KY","MS","OH","TN"),"l3","l2"))
+
+test_risk <- test_data[!is.na(test_data$risk_factor), ]
+test_norisk <- test_data[is.na(test_data$risk_factor), ]
+
+test_norisk$risk_factor = round(predict(hx_lm,newdata=test_norisk))
+
+test_data_wo_NA = rbind(test_risk,test_norisk)
+
+dim(test_data_wo_NA)
+
+test_data_wo_NA$cost = predict.lm(lm_cost,newdata=test_data_wo_NA)
+
+```  
