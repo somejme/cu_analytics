@@ -229,24 +229,30 @@ A multiple linear regression model was selected to predict the cost at a line le
 
 The following multiple linear regression model was chosen to predict the response, **COST**. The EDA demonstrated a very strong interaction between a few features, hence, interaction terms were introduced to improve ability to capture the variability in the response.
 
+data_wo_NA$shopping_pt = as.numeric(as.character(data_wo_NA$shopping_pt))
+
+str(data_wo_NA)
 
 ```{r}
 lm_cost = lm (cost ~  risk_factor+
                       car_value+
                       car_age*car_value+
-                      risk_factor*state+
+                      stat_cat+
+                      age_oldest+
+                      #risk_factor*state_cat+
                       risk_factor*homeowner+
                       risk_factor*age_oldest+
-                      risk_factor*age_youngest+
+                      #risk_factor*age_youngest+
                       risk_factor*family+
                       family+
-                      family*family_w_kids+
+                      #family*family_w_kids+
                       family*homeowner+
-                      #timeframe+
+                      timeframe+
                       weekend+
                       duration_previous+
-                      C_previous*duration_previous+
-                      car_value*homeowner+
+                      #C_previous*duration_previous+
+                      #car_value*homeowner+
+                      shopping_pt+
                       homeowner, data = data_wo_NA)
 
 
@@ -270,7 +276,6 @@ test_dat1_no_y = read.csv("C:/Users/sayooj/SkyDrive/Documents/UC Denver/Fall 201
 test_data = test_dat1_no_y
 
 dim(test_data)
-
 ```  
 
 ### **Feature-engineering for test dataset**  
@@ -329,6 +334,14 @@ test_data_wo_NA = rbind(test_risk,test_norisk)
 
 dim(test_data_wo_NA)
 
-test_data_wo_NA$cost = predict.lm(lm_cost,newdata=test_data_wo_NA)
-
+test_data_wo_NA$shopping_pt = as.numeric(as.character(test_data_wo_NA$shopping_pt))
 ```  
+
+
+
+### **Predicting the Cost vector for test dataset**  
+
+```{r}
+test_data_wo_NA$cost = round(predict(lm_cost,newdata=test_data_wo_NA),digits = 0)
+```  
+
