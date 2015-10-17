@@ -99,7 +99,7 @@ dim(data)</code></pre>
 ##  $ duration_previous: int  8 0 1 7 2 1 8 0 5 2 ...
 ##  $ cost             : int  565 642 664 558 606 605 650 604 622 708 ...</code></pre>
 <p><strong><em>Pairwise correlation matrix:</em></strong></p>
-<p>The correlation matrix below demonstrates that the correlation between the response variabe, cost, and the predictors is extremely low.</p>
+<p>The correlation matrix below demonstrates that the correlation between the response variable, cost, and the predictors is extremely low.</p>
 <pre class="r"><code>cor(data[,c(2,3,4,5,8,9,10,11,13,14,15,16,17,18,19)],use=&quot;pairwise&quot;,method=&quot;spearman&quot;)</code></pre>
 <pre><code>##                     customer_ID   shopping_pt   record_type          day
 ## customer_ID        1.000000e+00 -7.435084e-05 -0.0012335837  0.003054528
@@ -186,6 +186,17 @@ library(party)</code></pre>
 ##     as.Date, as.Date.numeric
 ## 
 ## Loading required package: sandwich</code></pre>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>## 
+## Attaching package: 'dplyr'
+## 
+## The following objects are masked from 'package:stats':
+## 
+##     filter, lag
+## 
+## The following objects are masked from 'package:base':
+## 
+##     intersect, setdiff, setequal, union</code></pre>
 </div>
 <div id="feature-engineering-steps-to-reduce-overfitting" class="section level2">
 <h2><strong>Feature Engineering steps to reduce Overfitting</strong></h2>
@@ -248,7 +259,7 @@ data$family_w_kids = as.factor(ifelse(data$group_size &gt; 2
 ##                 0                 0                 0                 0 
 ##            family     family_w_kids 
 ##                 0                 0</code></pre>
-<p><em>The missing values need to be filled in the dataframe to prevent the model from eliminating such rows. Hence, further EDA work was performed to logically deduce these values instead of arbitrarily filling them with random/average values.</em><br /><strong><em>Filling C_Previous:</em></strong> Adding an extra level - “Unknown” to fill NA values for C_previous. It was also observed that the duration_previous was always an NA when the C_previous was NA.</p>
+<p><em>The missing values need to be filled in the dataframe to prevent the model from eliminating such rows. Hence, further EDA work was performed to logically deduce these values instead of arbitrarily filling them with random/average values.</em><br /><strong><em>Filling C_Previous:</em></strong> Adding an extra level - “Unknown” to fill NA values for C_previous. It was also observed that the duration_previous was always an NA when the C_previous was NA, and vice-versa.</p>
 <pre class="r"><code>levels(data$C_previous) &lt;- c(&quot;1&quot;, &quot;2&quot;, &quot;3&quot;, &quot;4&quot;, &quot;Unknown&quot;)
 data$C_previous[is.na(data$C_previous)] = &quot;Unknown&quot;</code></pre>
 <p><strong><em>Filling duration_previous:</em></strong> Since duration_previous is a column of integer datatype, we replace NA values with “0”. Logically, this means that if the customer never had product option C, the duration would be ZERO years.</p>
@@ -340,6 +351,8 @@ mean (input.risk_factor != fitted.risk_factor) # misclassification %</code></pre
 
 data_wo_NA = rbind(risk,norisk)
 
+data_wo_NA$shopping_pt = as.numeric(as.character(data_wo_NA$shopping_pt))
+
 dim(data_wo_NA)</code></pre>
 <pre><code>## [1] 332624     27</code></pre>
 <p>The above dimensions indicate that the combined dataset, <strong>data_wo_NA</strong>, now has the same number of rows as the original. This will be the dataframe for further predictions.</p>
@@ -355,16 +368,22 @@ dim(data_wo_NA)</code></pre>
 <pre class="r"><code>lm_cost = lm (cost ~  risk_factor+
                       car_value+
                       car_age*car_value+
+                      state+
+                      age_oldest+
                       risk_factor*state+
                       risk_factor*homeowner+
-                      age_oldest+
-                      age_youngest+
+                      risk_factor*age_oldest+
+                      #risk_factor*age_youngest+
+                      risk_factor*family+
                       family+
-                      family*family_w_kids+
+                      #family*family_w_kids+
+                      family*homeowner+
                       timeframe+
                       weekend+
-                      C_previous+
-                      C_previous*duration_previous+
+                      duration_previous+
+                      #C_previous*duration_previous+
+                      car_value*homeowner+
+                      shopping_pt+
                       homeowner, data = data_wo_NA)
 
 
@@ -372,242 +391,134 @@ summary(lm_cost)</code></pre>
 <pre><code>## 
 ## Call:
 ## lm(formula = cost ~ risk_factor + car_value + car_age * car_value + 
-##     risk_factor * state + risk_factor * homeowner + age_oldest + 
-##     age_youngest + family + family * family_w_kids + timeframe + 
-##     weekend + C_previous + C_previous * duration_previous + homeowner, 
-##     data = data_wo_NA)
+##     state + age_oldest + risk_factor * state + risk_factor * 
+##     homeowner + risk_factor * age_oldest + risk_factor * family + 
+##     family + family * homeowner + timeframe + weekend + duration_previous + 
+##     car_value * homeowner + shopping_pt + homeowner, data = data_wo_NA)
 ## 
 ## Residuals:
 ##     Min      1Q  Median      3Q     Max 
-## -361.56  -23.54   -0.43   22.91  245.15 
+## -362.24  -24.33   -0.96   23.16  233.68 
 ## 
-## Coefficients: (2 not defined because of singularities)
-##                                       Estimate Std. Error t value Pr(&gt;|t|)
-## (Intercept)                         685.587344   7.061649  97.086  &lt; 2e-16
-## risk_factor                           3.485821   0.535231   6.513 7.39e-11
-## car_valuea                          -57.148842   9.291666  -6.151 7.73e-10
-## car_valueb                          -56.102762   8.892891  -6.309 2.82e-10
-## car_valuec                          -26.215805   6.909210  -3.794 0.000148
-## car_valued                          -17.856904   6.868224  -2.600 0.009325
-## car_valuee                          -14.681415   6.865310  -2.138 0.032478
-## car_valuef                          -17.337372   6.866088  -2.525 0.011568
-## car_valueg                          -11.875182   6.869108  -1.729 0.083849
-## car_valueh                            1.507865   6.882304   0.219 0.826578
-## car_valuei                           31.177886   6.991992   4.459 8.23e-06
-## car_age                              -0.923676   0.441590  -2.092 0.036466
-## stateAR                              22.378715   3.284177   6.814 9.50e-12
-## stateCO                              12.507722   2.254096   5.549 2.88e-08
-## stateCT                              30.906767   2.513338  12.297  &lt; 2e-16
-## stateDC                              60.002474   4.875335  12.307  &lt; 2e-16
-## stateDE                              11.048581   2.635920   4.192 2.77e-05
-## stateFL                              -6.714414   1.638157  -4.099 4.15e-05
-## stateGA                              12.207092   2.894762   4.217 2.48e-05
-## stateIA                             -22.187826   4.531957  -4.896 9.79e-07
-## stateID                             -30.531363   2.331264 -13.096  &lt; 2e-16
-## stateIN                             -17.728851   1.858299  -9.540  &lt; 2e-16
-## stateKS                               1.862760   3.665468   0.508 0.611319
-## stateKY                              22.587479   2.687897   8.403  &lt; 2e-16
-## stateMD                              11.937474   1.804812   6.614 3.74e-11
-## stateME                             -19.322406   3.848993  -5.020 5.17e-07
-## stateMO                              -3.187711   2.711238  -1.176 0.239700
-## stateMS                              27.515870   3.103530   8.866  &lt; 2e-16
-## stateMT                              14.039435   4.631572   3.031 0.002436
-## stateND                             -10.212809   7.072261  -1.444 0.148721
-## stateNE                             -21.724024   4.655000  -4.667 3.06e-06
-## stateNH                              11.998648   3.315677   3.619 0.000296
-## stateNM                              20.819849   3.418113   6.091 1.12e-09
-## stateNV                              33.294790   2.506165  13.285  &lt; 2e-16
-## stateNY                              10.963774   1.647764   6.654 2.86e-11
-## stateOH                               8.895061   2.028676   4.385 1.16e-05
-## stateOK                              17.752217   2.860252   6.207 5.42e-10
-## stateOR                               6.654168   2.475580   2.688 0.007190
-## statePA                              28.501238   1.883576  15.131  &lt; 2e-16
-## stateRI                               6.497522   3.084385   2.107 0.035154
-## stateSD                              17.606511  12.962477   1.358 0.174380
-## stateTN                               8.592764   2.443036   3.517 0.000436
-## stateUT                               5.919454   2.677085   2.211 0.027026
-## stateWA                               7.163628   2.131301   3.361 0.000776
-## stateWI                               4.167311   2.923669   1.425 0.154051
-## stateWV                              27.201072   4.021441   6.764 1.34e-11
-## stateWY                             -19.479338   7.148849  -2.725 0.006434
-## homeownerY                          -10.994394   0.441019 -24.930  &lt; 2e-16
-## age_oldest                            0.468786   0.010235  45.801  &lt; 2e-16
-## age_youngest                         -0.799849   0.009952 -80.374  &lt; 2e-16
-## familyY                             -10.266660   0.179516 -57.191  &lt; 2e-16
-## family_w_kidsY                       18.862251   0.766891  24.596  &lt; 2e-16
-## timeframenon_bus_hours                0.047228   0.340568   0.139 0.889709
-## weekendY                              3.522195   0.542919   6.488 8.74e-11
-## C_previous2                          -7.284794   0.317515 -22.943  &lt; 2e-16
-## C_previous3                         -12.536649   0.260567 -48.113  &lt; 2e-16
-## C_previous4                         -16.262976   0.353904 -45.953  &lt; 2e-16
-## C_previousUnknown                     0.269018   0.433572   0.620 0.534949
-## duration_previous                    -1.656875   0.029796 -55.607  &lt; 2e-16
-## car_valuea:car_age                    0.925802   0.463272   1.998 0.045674
-## car_valueb:car_age                    0.432971   0.478933   0.904 0.365979
-## car_valuec:car_age                   -0.944138   0.444152  -2.126 0.033528
-## car_valued:car_age                   -1.381025   0.442363  -3.122 0.001797
-## car_valuee:car_age                   -1.610138   0.442096  -3.642 0.000271
-## car_valuef:car_age                   -1.285992   0.442356  -2.907 0.003648
-## car_valueg:car_age                   -1.113943   0.443003  -2.515 0.011920
-## car_valueh:car_age                   -1.441447   0.446085  -3.231 0.001232
-## car_valuei:car_age                   -2.037895   0.466052  -4.373 1.23e-05
-## risk_factor:stateAR                  -5.623150   1.078980  -5.212 1.87e-07
-## risk_factor:stateCO                  -3.331426   0.715127  -4.659 3.19e-06
-## risk_factor:stateCT                  -3.882734   0.817582  -4.749 2.04e-06
-## risk_factor:stateDC                 -10.687404   1.448568  -7.378 1.61e-13
-## risk_factor:stateDE                   9.149714   0.895974  10.212  &lt; 2e-16
-## risk_factor:stateFL                  13.812465   0.546057  25.295  &lt; 2e-16
-## risk_factor:stateGA                   0.338949   0.946040   0.358 0.720133
-## risk_factor:stateIA                  -3.153787   1.479763  -2.131 0.033067
-## risk_factor:stateID                   2.717595   0.825347   3.293 0.000993
-## risk_factor:stateIN                   3.062366   0.608368   5.034 4.81e-07
-## risk_factor:stateKS                  -1.671462   1.189855  -1.405 0.160093
-## risk_factor:stateKY                  -1.147581   0.849350  -1.351 0.176655
-## risk_factor:stateMD                   6.527235   0.592529  11.016  &lt; 2e-16
-## risk_factor:stateME                  -0.237117   1.262308  -0.188 0.850999
-## risk_factor:stateMO                  -3.867356   0.883192  -4.379 1.19e-05
-## risk_factor:stateMS                  -5.146220   0.989827  -5.199 2.00e-07
-## risk_factor:stateMT                  -4.106278   1.505222  -2.728 0.006372
-## risk_factor:stateND                   5.796755   2.343824   2.473 0.013391
-## risk_factor:stateNE                   3.243179   1.500904   2.161 0.030710
-## risk_factor:stateNH                  -6.188160   1.078423  -5.738 9.58e-09
-## risk_factor:stateNM                  -4.108511   1.117802  -3.676 0.000237
-## risk_factor:stateNV                  -2.794434   0.819788  -3.409 0.000653
-## risk_factor:stateNY                  10.509262   0.548170  19.172  &lt; 2e-16
-## risk_factor:stateOH                  -4.997139   0.653334  -7.649 2.04e-14
-## risk_factor:stateOK                  -5.916494   0.931294  -6.353 2.11e-10
-## risk_factor:stateOR                  -2.199367   0.803062  -2.739 0.006168
-## risk_factor:statePA                  -4.559454   0.613469  -7.432 1.07e-13
-## risk_factor:stateRI                   7.256755   1.020992   7.108 1.18e-12
-## risk_factor:stateSD                  -6.064130   4.239625  -1.430 0.152619
-## risk_factor:stateTN                  -2.336947   0.781103  -2.992 0.002773
-## risk_factor:stateUT                  -6.100719   0.839400  -7.268 3.66e-13
-## risk_factor:stateWA                   1.096073   0.693604   1.580 0.114049
-## risk_factor:stateWI                  -8.645798   0.914508  -9.454  &lt; 2e-16
-## risk_factor:stateWV                  -2.506735   1.296759  -1.933 0.053228
-## risk_factor:stateWY                   2.934570   2.307751   1.272 0.203511
-## risk_factor:homeownerY               -0.967865   0.148425  -6.521 7.00e-11
-## familyY:family_w_kidsY                      NA         NA      NA       NA
-## C_previous2:duration_previous         0.263772   0.044392   5.942 2.82e-09
-## C_previous3:duration_previous         0.685888   0.036186  18.954  &lt; 2e-16
-## C_previous4:duration_previous         0.868886   0.047035  18.473  &lt; 2e-16
-## C_previousUnknown:duration_previous         NA         NA      NA       NA
-##                                        
-## (Intercept)                         ***
-## risk_factor                         ***
-## car_valuea                          ***
-## car_valueb                          ***
-## car_valuec                          ***
-## car_valued                          ** 
-## car_valuee                          *  
-## car_valuef                          *  
-## car_valueg                          .  
-## car_valueh                             
-## car_valuei                          ***
-## car_age                             *  
-## stateAR                             ***
-## stateCO                             ***
-## stateCT                             ***
-## stateDC                             ***
-## stateDE                             ***
-## stateFL                             ***
-## stateGA                             ***
-## stateIA                             ***
-## stateID                             ***
-## stateIN                             ***
-## stateKS                                
-## stateKY                             ***
-## stateMD                             ***
-## stateME                             ***
-## stateMO                                
-## stateMS                             ***
-## stateMT                             ** 
-## stateND                                
-## stateNE                             ***
-## stateNH                             ***
-## stateNM                             ***
-## stateNV                             ***
-## stateNY                             ***
-## stateOH                             ***
-## stateOK                             ***
-## stateOR                             ** 
-## statePA                             ***
-## stateRI                             *  
-## stateSD                                
-## stateTN                             ***
-## stateUT                             *  
-## stateWA                             ***
-## stateWI                                
-## stateWV                             ***
-## stateWY                             ** 
-## homeownerY                          ***
-## age_oldest                          ***
-## age_youngest                        ***
-## familyY                             ***
-## family_w_kidsY                      ***
-## timeframenon_bus_hours                 
-## weekendY                            ***
-## C_previous2                         ***
-## C_previous3                         ***
-## C_previous4                         ***
-## C_previousUnknown                      
-## duration_previous                   ***
-## car_valuea:car_age                  *  
-## car_valueb:car_age                     
-## car_valuec:car_age                  *  
-## car_valued:car_age                  ** 
-## car_valuee:car_age                  ***
-## car_valuef:car_age                  ** 
-## car_valueg:car_age                  *  
-## car_valueh:car_age                  ** 
-## car_valuei:car_age                  ***
-## risk_factor:stateAR                 ***
-## risk_factor:stateCO                 ***
-## risk_factor:stateCT                 ***
-## risk_factor:stateDC                 ***
-## risk_factor:stateDE                 ***
-## risk_factor:stateFL                 ***
-## risk_factor:stateGA                    
-## risk_factor:stateIA                 *  
-## risk_factor:stateID                 ***
-## risk_factor:stateIN                 ***
-## risk_factor:stateKS                    
-## risk_factor:stateKY                    
-## risk_factor:stateMD                 ***
-## risk_factor:stateME                    
-## risk_factor:stateMO                 ***
-## risk_factor:stateMS                 ***
-## risk_factor:stateMT                 ** 
-## risk_factor:stateND                 *  
-## risk_factor:stateNE                 *  
-## risk_factor:stateNH                 ***
-## risk_factor:stateNM                 ***
-## risk_factor:stateNV                 ***
-## risk_factor:stateNY                 ***
-## risk_factor:stateOH                 ***
-## risk_factor:stateOK                 ***
-## risk_factor:stateOR                 ** 
-## risk_factor:statePA                 ***
-## risk_factor:stateRI                 ***
-## risk_factor:stateSD                    
-## risk_factor:stateTN                 ** 
-## risk_factor:stateUT                 ***
-## risk_factor:stateWA                    
-## risk_factor:stateWI                 ***
-## risk_factor:stateWV                 .  
-## risk_factor:stateWY                    
-## risk_factor:homeownerY              ***
-## familyY:family_w_kidsY                 
-## C_previous2:duration_previous       ***
-## C_previous3:duration_previous       ***
-## C_previous4:duration_previous       ***
-## C_previousUnknown:duration_previous    
+## Coefficients:
+##                          Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)            669.363801   7.282180  91.918  &lt; 2e-16 ***
+## risk_factor              6.221877   0.579841  10.730  &lt; 2e-16 ***
+## car_valuea             -60.000222   9.813905  -6.114 9.74e-10 ***
+## car_valueb             -59.492144   9.289136  -6.404 1.51e-10 ***
+## car_valuec             -26.946541   7.116686  -3.786 0.000153 ***
+## car_valued             -19.980476   7.069813  -2.826 0.004711 ** 
+## car_valuee             -16.984168   7.066364  -2.404 0.016238 *  
+## car_valuef             -19.184194   7.067974  -2.714 0.006643 ** 
+## car_valueg             -13.093155   7.073335  -1.851 0.064162 .  
+## car_valueh               0.036312   7.101038   0.005 0.995920    
+## car_valuei              30.772015   7.350768   4.186 2.84e-05 ***
+## car_age                 -0.818222   0.450375  -1.817 0.069255 .  
+## stateAR                 22.729001   3.349448   6.786 1.16e-11 ***
+## stateCO                 12.730650   2.300113   5.535 3.12e-08 ***
+## stateCT                 31.920870   2.563024  12.454  &lt; 2e-16 ***
+## stateDC                 61.053248   4.973552  12.276  &lt; 2e-16 ***
+## stateDE                  8.797511   2.688393   3.272 0.001066 ** 
+## stateFL                 -8.169310   1.670351  -4.891 1.00e-06 ***
+## stateGA                 12.296715   2.952461   4.165 3.12e-05 ***
+## stateIA                -22.653431   4.622422  -4.901 9.55e-07 ***
+## stateID                -29.857577   2.378930 -12.551  &lt; 2e-16 ***
+## stateIN                -18.455146   1.896411  -9.732  &lt; 2e-16 ***
+## stateKS                 -0.022228   3.738169  -0.006 0.995256    
+## stateKY                 23.535024   2.741837   8.584  &lt; 2e-16 ***
+## stateMD                 11.953293   1.842599   6.487 8.76e-11 ***
+## stateME                -19.502006   3.925530  -4.968 6.77e-07 ***
+## stateMO                 -2.082578   2.765321  -0.753 0.451387    
+## stateMS                 29.650137   3.165653   9.366  &lt; 2e-16 ***
+## stateMT                 11.929199   4.723169   2.526 0.011548 *  
+## stateND                -10.737796   7.213461  -1.489 0.136600    
+## stateNE                -22.737850   4.748118  -4.789 1.68e-06 ***
+## stateNH                  9.578855   3.380968   2.833 0.004609 ** 
+## stateNM                 22.082696   3.485913   6.335 2.38e-10 ***
+## stateNV                 32.795332   2.556044  12.831  &lt; 2e-16 ***
+## stateNY                 10.277813   1.679831   6.118 9.46e-10 ***
+## stateOH                  7.753130   2.069138   3.747 0.000179 ***
+## stateOK                 18.918832   2.917001   6.486 8.84e-11 ***
+## stateOR                  5.035996   2.524572   1.995 0.046066 *  
+## statePA                 27.946530   1.920872  14.549  &lt; 2e-16 ***
+## stateRI                  2.962996   3.146214   0.942 0.346313    
+## stateSD                 15.785223  13.219634   1.194 0.232450    
+## stateTN                  9.310275   2.491707   3.737 0.000187 ***
+## stateUT                  9.732760   2.731519   3.563 0.000367 ***
+## stateWA                  4.704487   2.173068   2.165 0.030396 *  
+## stateWI                  1.676116   2.981224   0.562 0.573964    
+## stateWV                 30.526174   4.101212   7.443 9.85e-14 ***
+## stateWY                -22.089016   7.290958  -3.030 0.002449 ** 
+## age_oldest              -0.157312   0.013149 -11.964  &lt; 2e-16 ***
+## homeownerY              -6.376631   2.912133  -2.190 0.028548 *  
+## familyY                 -3.639446   0.634902  -5.732 9.92e-09 ***
+## timeframenon_bus_hours   0.113213   0.347426   0.326 0.744528    
+## weekendY                 4.256071   0.553634   7.688 1.50e-14 ***
+## duration_previous       -1.321827   0.014718 -89.808  &lt; 2e-16 ***
+## shopping_pt              0.615985   0.027321  22.546  &lt; 2e-16 ***
+## car_valuea:car_age       0.843522   0.472503   1.785 0.074226 .  
+## car_valueb:car_age       0.360649   0.488486   0.738 0.460333    
+## car_valuec:car_age      -0.999992   0.452991  -2.208 0.027278 *  
+## car_valued:car_age      -1.402439   0.451165  -3.108 0.001881 ** 
+## car_valuee:car_age      -1.621138   0.450894  -3.595 0.000324 ***
+## car_valuef:car_age      -1.259627   0.451163  -2.792 0.005239 ** 
+## car_valueg:car_age      -1.084761   0.451828  -2.401 0.016359 *  
+## car_valueh:car_age      -1.421905   0.455004  -3.125 0.001778 ** 
+## car_valuei:car_age      -2.035754   0.475371  -4.282 1.85e-05 ***
+## risk_factor:stateAR     -5.366712   1.100466  -4.877 1.08e-06 ***
+## risk_factor:stateCO     -4.046213   0.729997  -5.543 2.98e-08 ***
+## risk_factor:stateCT     -4.540945   0.833811  -5.446 5.15e-08 ***
+## risk_factor:stateDC    -11.135527   1.477625  -7.536 4.85e-14 ***
+## risk_factor:stateDE      9.896988   0.913735  10.831  &lt; 2e-16 ***
+## risk_factor:stateFL     13.822107   0.556926  24.819  &lt; 2e-16 ***
+## risk_factor:stateGA     -0.066549   0.964869  -0.069 0.945012    
+## risk_factor:stateIA     -3.970439   1.509297  -2.631 0.008522 ** 
+## risk_factor:stateID      1.834522   0.842177   2.178 0.029384 *  
+## risk_factor:stateIN      2.922843   0.620856   4.708 2.51e-06 ***
+## risk_factor:stateKS     -2.078589   1.213470  -1.713 0.086726 .  
+## risk_factor:stateKY     -1.853450   0.866369  -2.139 0.032410 *  
+## risk_factor:stateMD      6.257521   0.604794  10.347  &lt; 2e-16 ***
+## risk_factor:stateME     -0.973328   1.287406  -0.756 0.449627    
+## risk_factor:stateMO     -4.711699   0.900850  -5.230 1.69e-07 ***
+## risk_factor:stateMS     -5.511770   1.009594  -5.459 4.78e-08 ***
+## risk_factor:stateMT     -3.835610   1.535119  -2.499 0.012470 *  
+## risk_factor:stateND      6.248792   2.390227   2.614 0.008941 ** 
+## risk_factor:stateNE      2.462137   1.531069   1.608 0.107811    
+## risk_factor:stateNH     -6.053630   1.099760  -5.505 3.70e-08 ***
+## risk_factor:stateNM     -4.136411   1.139974  -3.629 0.000285 ***
+## risk_factor:stateNV     -2.463083   0.836188  -2.946 0.003223 ** 
+## risk_factor:stateNY      9.835627   0.558974  17.596  &lt; 2e-16 ***
+## risk_factor:stateOH     -5.393532   0.666488  -8.092 5.87e-16 ***
+## risk_factor:stateOK     -6.237714   0.949855  -6.567 5.14e-11 ***
+## risk_factor:stateOR     -2.360924   0.819023  -2.883 0.003944 ** 
+## risk_factor:statePA     -4.884481   0.625647  -7.807 5.87e-15 ***
+## risk_factor:stateRI      7.618400   1.041560   7.314 2.59e-13 ***
+## risk_factor:stateSD     -6.098423   4.323710  -1.410 0.158405    
+## risk_factor:stateTN     -3.054297   0.796656  -3.834 0.000126 ***
+## risk_factor:stateUT     -7.443804   0.856694  -8.689  &lt; 2e-16 ***
+## risk_factor:stateWA      1.018280   0.707313   1.440 0.149969    
+## risk_factor:stateWI     -9.212802   0.932652  -9.878  &lt; 2e-16 ***
+## risk_factor:stateWV     -4.061358   1.322494  -3.071 0.002134 ** 
+## risk_factor:stateWY      2.867641   2.353732   1.218 0.223097    
+## risk_factor:homeownerY   0.080438   0.165677   0.486 0.627316    
+## risk_factor:age_oldest  -0.043472   0.004639  -9.370  &lt; 2e-16 ***
+## risk_factor:familyY     -1.091881   0.184513  -5.918 3.27e-09 ***
+## homeownerY:familyY       0.245153   0.394853   0.621 0.534685    
+## car_valuea:homeownerY   -6.651217   4.390707  -1.515 0.129814    
+## car_valueb:homeownerY   -1.862891   4.104600  -0.454 0.649934    
+## car_valuec:homeownerY   -7.669282   2.962213  -2.589 0.009625 ** 
+## car_valued:homeownerY   -5.404629   2.885344  -1.873 0.061051 .  
+## car_valuee:homeownerY   -6.534481   2.876836  -2.271 0.023123 *  
+## car_valuef:homeownerY   -8.810613   2.879289  -3.060 0.002214 ** 
+## car_valueg:homeownerY  -10.461824   2.889614  -3.620 0.000294 ***
+## car_valueh:homeownerY  -10.228438   2.947537  -3.470 0.000520 ***
+## car_valuei:homeownerY  -12.257231   3.487573  -3.515 0.000441 ***
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ## 
-## Residual standard error: 36.91 on 332517 degrees of freedom
-## Multiple R-squared:  0.3575, Adjusted R-squared:  0.3573 
-## F-statistic:  1745 on 106 and 332517 DF,  p-value: &lt; 2.2e-16</code></pre>
+## Residual standard error: 37.65 on 332513 degrees of freedom
+## Multiple R-squared:  0.3317, Adjusted R-squared:  0.3315 
+## F-statistic:  1500 on 110 and 332513 DF,  p-value: &lt; 2.2e-16</code></pre>
 </div>
 </div>
 <div id="significant-inferences-from-the-model" class="section level2">
@@ -619,6 +530,82 @@ summary(lm_cost)</code></pre>
 <li>Cost of the policy may potentially be lower for homeowners.<br /></li>
 <li>The cost of a policy is higher over the weekend.</li>
 </ol>
+</div>
+</div>
+<div id="predicting-cost-vector-for-test-dataset" class="section level2">
+<h2><strong>Predicting Cost Vector for test dataset:</strong></h2>
+<pre class="r"><code>test_dat1_no_y = read.csv(&quot;C:/Users/sayooj/SkyDrive/Documents/UC Denver/Fall 2015/Predictive Analytics/Project1/test_dat1_no_y.csv&quot;)
+
+test_data = test_dat1_no_y
+
+dim(test_data)</code></pre>
+<pre><code>## [1] 332625     18</code></pre>
+<div id="feature-engineering-for-test-dataset" class="section level3">
+<h3><strong>Feature-engineering for test dataset</strong></h3>
+<pre class="r"><code>test_data$X = as.factor(test_data$X)
+test_data$customer_ID = as.factor(test_data$customer_ID)
+test_data$shopping_pt = as.factor(test_data$shopping_pt)
+test_data$record_type = as.factor(test_data$record_type)
+test_data$day = as.factor(test_data$day)
+test_data$location = as.factor(test_data$location)
+test_data$homeowner = as.factor(test_data$homeowner)
+test_data$risk_factor = as.factor(test_data$risk_factor) ##in-doubt
+test_data$married_couple = as.factor(test_data$married_couple)
+test_data$C_previous = as.factor(test_data$C_previous)
+
+test_data$weekend = as.factor(ifelse(test_data$day %in% 0:4, &quot;N&quot;, &quot;Y&quot;))
+
+test_data$HH = as.integer(sub(&quot;:.*&quot;, &quot;&quot;, test_data$time)) #get the HOUR from TIME and convert to INTEGER
+test_data$timeframe = as.factor(ifelse(test_data$HH %in% 8:17, &quot;bus_hours&quot;,&quot;non_bus_hours&quot;))
+
+test_data$age_diff = test_data$age_oldest-test_data$age_youngest
+
+test_data$single = as.factor(ifelse(test_data$age_diff==0 &amp; test_data$group_size==1,
+                                     &quot;Y&quot;, &quot;N&quot;))
+
+test_data$family = as.factor(ifelse(test_data$group_size &gt;= 2 
+                                     &amp; test_data$married_couple==1, &quot;Y&quot;, &quot;N&quot;))
+
+
+test_data$family_w_kids = as.factor(ifelse(test_data$group_size &gt; 2 
+                                            &amp; test_data$married_couple==1 
+                                            &amp; test_data$age_youngest&lt;=21 , &quot;Y&quot;, &quot;N&quot;))
+
+test_data$homeowner = ifelse(test_data$homeowner==&quot;1&quot;,&quot;Y&quot;,&quot;N&quot;) 
+
+test_data$risk_factor = ifelse(test_data$risk_factor==&quot;1&quot;,1,
+                          ifelse(test_data$risk_factor==&quot;2&quot;,2,
+                                 ifelse(test_data$risk_factor==&quot;3&quot;,3,
+                                        ifelse(test_data$risk_factor==&quot;4&quot;,4,NA))))
+
+levels(test_data$C_previous) &lt;- c(&quot;1&quot;, &quot;2&quot;, &quot;3&quot;, &quot;4&quot;, &quot;Unknown&quot;)
+test_data$C_previous[is.na(test_data$C_previous)] = &quot;Unknown&quot;
+test_data$duration_previous[is.na(test_data$duration_previous)] = 0
+
+
+test_data$state_cat = ifelse(test_data$state %in% c(&quot;ID&quot;,&quot;NY&quot;,&quot;FL&quot;),&quot;l1&quot;,
+                        ifelse(test_data$state %in% c(&quot;DC&quot;,&quot;UT&quot;,&quot;WI&quot;,&quot;CO&quot;,&quot;KY&quot;,&quot;MS&quot;,&quot;OH&quot;,&quot;TN&quot;),&quot;l3&quot;,&quot;l2&quot;))
+
+test_risk &lt;- test_data[!is.na(test_data$risk_factor), ]
+test_norisk &lt;- test_data[is.na(test_data$risk_factor), ]
+
+test_norisk$risk_factor = round(predict(hx_lm,newdata=test_norisk))
+
+test_data_wo_NA = rbind(test_risk,test_norisk)
+
+dim(test_data_wo_NA)</code></pre>
+<pre><code>## [1] 332625     26</code></pre>
+<pre class="r"><code>test_data_wo_NA$shopping_pt = as.numeric(as.character(test_data_wo_NA$shopping_pt))</code></pre>
+</div>
+<div id="predicting-cost-function" class="section level3">
+<h3><strong>Predicting Cost function</strong></h3>
+<pre class="r"><code>test_data_wo_NA$cost = round(predict(lm_cost,newdata=test_data_wo_NA),digits = 0)</code></pre>
+</div>
+<div id="export-x-cost-dataframe-to-csv-for-submission" class="section level3">
+<h3><strong>Export X-Cost dataframe to CSV for submission</strong></h3>
+<pre class="r"><code>submission_csv = select(test_data_wo_NA,X,cost)
+
+write.csv(submission_csv, file=&quot;submission.csv&quot;,row.names = FALSE)</code></pre>
 </div>
 </div>
 

@@ -18,7 +18,7 @@ str(data)
 
 **_Pairwise correlation matrix:_** 
 
-The correlation matrix below demonstrates that the correlation between the response variabe, cost, and the predictors is extremely low.
+The correlation matrix below demonstrates that the correlation between the response variable, cost, and the predictors is extremely low.
 
 ```{r}
 cor(data[,c(2,3,4,5,8,9,10,11,13,14,15,16,17,18,19)],use="pairwise",method="spearman")
@@ -43,6 +43,7 @@ The interesting correlations in the matrix were:
 library(ggplot2)
 library(tree)
 library(party)
+library(dplyr)
 
 ```  
 
@@ -129,7 +130,7 @@ sapply(data, function(x) sum(is.na(x)))
 ```  
 
 _The missing values need to be filled in the dataframe to prevent the model from eliminating such rows. Hence, further EDA work was performed to logically deduce these values instead of arbitrarily filling them with random/average values._  
-**_Filling C_Previous:_**  Adding an extra level - "Unknown" to fill NA values for C_previous. It was also observed that the duration_previous was always an NA when the C_previous was NA. 
+**_Filling C_Previous:_**  Adding an extra level - "Unknown" to fill NA values for C_previous. It was also observed that the duration_previous was always an NA when the C_previous was NA, and vice-versa. 
 
 ```{r}
 levels(data$C_previous) <- c("1", "2", "3", "4", "Unknown")
@@ -209,6 +210,8 @@ norisk$risk_factor = round(predict(hx_lm,newdata=norisk))
 
 data_wo_NA = rbind(risk,norisk)
 
+data_wo_NA$shopping_pt = as.numeric(as.character(data_wo_NA$shopping_pt))
+
 dim(data_wo_NA)
 ```  
 
@@ -229,17 +232,14 @@ A multiple linear regression model was selected to predict the cost at a line le
 
 The following multiple linear regression model was chosen to predict the response, **COST**. The EDA demonstrated a very strong interaction between a few features, hence, interaction terms were introduced to improve ability to capture the variability in the response.
 
-data_wo_NA$shopping_pt = as.numeric(as.character(data_wo_NA$shopping_pt))
-
-str(data_wo_NA)
 
 ```{r}
 lm_cost = lm (cost ~  risk_factor+
                       car_value+
                       car_age*car_value+
-                      stat_cat+
+                      state+
                       age_oldest+
-                      #risk_factor*state_cat+
+                      risk_factor*state+
                       risk_factor*homeowner+
                       risk_factor*age_oldest+
                       #risk_factor*age_youngest+
@@ -251,7 +251,7 @@ lm_cost = lm (cost ~  risk_factor+
                       weekend+
                       duration_previous+
                       #C_previous*duration_previous+
-                      #car_value*homeowner+
+                      car_value*homeowner+
                       shopping_pt+
                       homeowner, data = data_wo_NA)
 
@@ -339,9 +339,22 @@ test_data_wo_NA$shopping_pt = as.numeric(as.character(test_data_wo_NA$shopping_p
 
 
 
-### **Predicting the Cost vector for test dataset**  
+### **Predicting Cost function**  
 
 ```{r}
 test_data_wo_NA$cost = round(predict(lm_cost,newdata=test_data_wo_NA),digits = 0)
 ```  
+
+### **Export X-Cost dataframe to CSV for submission**  
+
+```{r}
+submission_csv = select(test_data_wo_NA,X,cost)
+
+write.csv(submission_csv, file="submission.csv",row.names = FALSE)
+```  
+
+
+
+
+
 
