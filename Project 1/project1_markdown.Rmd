@@ -1,0 +1,360 @@
+---
+title: "BANA 6660 Project 1 Submission"
+author: "Courtney Baughman / Jamie White / Sayooj Das"
+date: "October 15, 2015"
+output: html_document
+---  
+
+## **Objective:**  
+To predict the cost of the policy at a line level for the inputted data set using a regression model. The predicted cost may be for a quote or purchase.  
+
+
+## **About the provided Dataset:**    
+```{r}
+data = read.csv("C:/Users/sayooj/SkyDrive/Documents/UC Denver/Fall 2015/Predictive Analytics/train_dat1") #read data
+dim(data)
+str(data)
+```
+
+**_Pairwise correlation matrix:_** 
+
+The correlation matrix below demonstrates that the correlation between the response variable, cost, and the predictors is extremely low.
+
+```{r}
+cor(data[,c(2,3,4,5,8,9,10,11,13,14,15,16,17,18,19)],use="pairwise",method="spearman")
+```  
+
+The interesting correlations in the matrix were:  
+  cost-homeowner **(-22%)**  
+  cost-car_age **(-28%)**  
+  age_oldest_age_youngest **(90%)**  
+  cost-age_oldest **(-22%)**  
+  cost-age_youngest **(-26%)**  
+  cost-duration_previous **(-17%)**   
+  risk_factor-homeowner **(-18%)**   
+  risk_factor-age_oldest **(-30%)**  
+  risk_factor-age_youngest **(-29%)**  
+  risk_factor-C_previous **(-13%)**  
+  risk_factor-duration_previous **(-17%)**  
+  
+##**Invoke all required libraries**  
+```{r}
+
+library(ggplot2)
+library(tree)
+library(party)
+library(dplyr)
+
+```  
+
+
+    
+## **Feature Engineering steps to reduce Overfitting**  
+
+**_Convert below variables to FACTORS (based on EDA)_**  
+
+```{r}
+data$X = as.factor(data$X)
+data$customer_ID = as.factor(data$customer_ID)
+data$shopping_pt = as.factor(data$shopping_pt)
+data$record_type = as.factor(data$record_type)
+data$day = as.factor(data$day)
+data$location = as.factor(data$location)
+data$homeowner = as.factor(data$homeowner)
+data$risk_factor = as.factor(data$risk_factor) ##in-doubt
+data$married_couple = as.factor(data$married_couple)
+data$C_previous = as.factor(data$C_previous)
+```  
+
+**_Derived predictors:_**  
+
+**Weekend:**  Variable to determine whether the day of transaction is a weekday or weekend.  
+
+```{r}
+data$weekend = as.factor(ifelse(data$day %in% 0:4, "N", "Y"))
+```  
+
+**Timeframe:**  Variable to determine whether the time of transaction is during core business hours. 
+
+**Figure-Median Cost by Time:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyTime.png)  
+
+The above visual provided sufficient insight into the need for deriving a new timeframe feature indicating whether the transaction occurred during business hours of 8am through 5pm.  
+
+```{r}
+data$HH = as.integer(sub(":.*", "", data$time)) #get the HOUR from TIME and convert to INTEGER
+data$timeframe = as.factor(ifelse(data$HH %in% 8:17, "bus_hours","non_bus_hours"))
+```  
+
+**Group features:**  A set of derived flags to determine whether the customer is an individual or group.  
+
+```{r}
+data$age_diff = data$age_oldest-data$age_youngest
+
+data$single = as.factor(ifelse(data$age_diff==0 & data$group_size==1,
+                                     "Y", "N"))
+
+data$family = as.factor(ifelse(data$group_size >= 2 
+                                     & data$married_couple==1, "Y", "N"))
+
+
+data$family_w_kids = as.factor(ifelse(data$group_size > 2 
+                                            & data$married_couple==1 
+                                            & data$age_youngest<=21 , "Y", "N"))
+
+#data$single = ifelse(data$single=="Y",1,0)
+#data$family = ifelse(data$family=="Y",1,0)
+#data$family_w_kids = ifelse(data$family_w_kids=="Y",1,0)
+
+```  
+
+**Convert the homeowner indicator:**  
+```{r}
+data$homeowner = ifelse(data$homeowner=="1","Y","N") 
+```  
+ 
+
+**Convert risk factor into a numerical variable:**  
+The risk factor is an ordinal number based on the information provided. Converting the risk factor to a discrete numerical variable will aid the model building process as discussed further down below.  
+
+```{r}
+data$risk_factor = ifelse(data$risk_factor=="1",1,
+                          ifelse(data$risk_factor=="2",2,
+                                 ifelse(data$risk_factor=="3",3,
+                                        ifelse(data$risk_factor=="4",4,NA))))
+```  
+
+**Missing value Analysis**  
+
+```{r}
+sapply(data, function(x) sum(is.na(x)))
+```  
+
+_The missing values need to be filled in the dataframe to prevent the model from eliminating such rows. Hence, further EDA work was performed to logically deduce these values instead of arbitrarily filling them with random/average values._  
+**_Filling C_Previous:_**  Adding an extra level - "Unknown" to fill NA values for C_previous. It was also observed that the duration_previous was always an NA when the C_previous was NA, and vice-versa. 
+
+```{r}
+levels(data$C_previous) <- c("1", "2", "3", "4", "Unknown")
+data$C_previous[is.na(data$C_previous)] = "Unknown"
+```  
+
+**_Filling duration_previous:_**  Since duration_previous is a column of integer datatype, we replace NA values with "0". Logically, this means that if the customer never had product option C, the duration would be ZERO years.  
+
+```{r}
+data$duration_previous[is.na(data$duration_previous)] = 0
+```  
+
+**_Filling risk_factor:_**  Per our correlation matrix, the risk factor variable is not highly correlated with any single predictor variable. Considering the risk factor is an ordinal numerical variable, a multiple linear regression model was used to predict the missing values and ROUNDED to the nearest integer. The predictor variables were determined via Exploratory Data Analysis, the visuals of which are as follows:  
+
+**Figure-Risk Factor Distribution by State:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\RiskFactorDistributionbyState.png)  
+
+**Figure-Risk Factor Distribution by Age:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\RiskFactorbyAgeYoungDistribution.png)  
+
+
+Let us begin by first splitting the dataset in two : records with risk-factor and without risk-factor.  
+
+```{r}
+risk <- data[!is.na(data$risk_factor), ]
+norisk <- data[is.na(data$risk_factor), ]
+
+hx_tree = ctree(risk$risk_factor ~  risk$state) #Classification tree relating risk factor and state
+
+#plot (hx_tree, main="Classification Tree-Risk Factor vs State",asp=0.5)  # the ctree
+
+```  
+
+**Figure-Classification tree Risk Factor by State:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\class_tree.png)  
+
+Based on the above classification tree, we can derive a new feature categorizing the states into low, medium and high risk factors.  
+
+
+```{r}
+
+data$state_cat = ifelse(data$state %in% c("ID","NY","FL"),"l1",
+                        ifelse(data$state %in% c("DC","UT","WI","CO","KY","MS","OH","TN"),"l3","l2"))
+
+risk <- data[!is.na(data$risk_factor), ]
+norisk <- data[is.na(data$risk_factor), ]
+
+hx_lm = lm(risk_factor ~ family+
+                         family_w_kids+
+                         age_oldest*age_youngest+
+                         state_cat+
+                         duration_previous+
+                         car_age*car_value+
+                         homeowner,data=risk)
+
+summary(hx_lm)
+
+```  
+
+An assessment of the misclassification of risk factors was performed against the dataset with populated risk factors. The linear **_model predicted risk factor with a 34% accuracy_** rating, as calculated below. We chose to proceed with this approach considering it is better than the 25% random assumption.  
+
+
+
+
+```{r}
+fitted.risk_factor = round(predict(hx_lm,newdata=risk),digits = 0)
+input.risk_factor = as.character (risk$risk_factor) # actuals
+# View(cbind(input.risk_factor,fitted.risk_factor))
+mean (input.risk_factor != fitted.risk_factor) # misclassification %
+```  
+
+
+### **Populating the missing risk factor in the original dataset**  
+
+The linear model, **hx_lm**, was used to fill the missing NA risk factors in the split norisk dataframe.  
+
+
+```{r}
+norisk$risk_factor = round(predict(hx_lm,newdata=norisk))
+
+data_wo_NA = rbind(risk,norisk)
+
+data_wo_NA$shopping_pt = as.numeric(as.character(data_wo_NA$shopping_pt))
+
+dim(data_wo_NA)
+```  
+
+The above dimensions indicate that the combined dataset, **data_wo_NA**, now has the same number of rows as the original. This will be the dataframe for further predictions.  
+
+### **Modelling the response - COST**  
+
+A multiple linear regression model was selected to predict the cost at a line level. Using a correlation matrix, we selected variables with high correlation with the response variable. Additionally, we performed EDA for the non-numeric variables in Tableau. Below are the plots demonstrating interesting correlations:  
+
+**Figure-Cost by weekday/weekend:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyTime-Shop_weekendvsweekday.png)  
+
+**Figure-Cost by State:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyState.png)  
+
+**Figure-Cost by Car Value:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyCarValue.png) 
+
+**Figure-Cost by Time of day:** ![](C:\Users\sayooj\Documents\GitHub\cu_analytics\MedianCostbyTime.png) 
+
+
+The following multiple linear regression model was chosen to predict the response, **COST**. The EDA demonstrated a very strong interaction between a few features, hence, interaction terms were introduced to improve ability to capture the variability in the response.
+
+
+```{r}
+lm_cost = lm (cost ~  risk_factor+
+                      car_value+
+                      car_age*car_value+
+                      state+
+                      age_oldest+
+                      risk_factor*state+
+                      risk_factor*homeowner+
+                      risk_factor*age_oldest+
+                      #risk_factor*age_youngest+
+                      risk_factor*family+
+                      family+
+                      #family*family_w_kids+
+                      family*homeowner+
+                      timeframe+
+                      weekend+
+                      duration_previous+
+                      #C_previous*duration_previous+
+                      car_value*homeowner+
+                      shopping_pt+
+                      homeowner, data = data_wo_NA)
+
+
+summary(lm_cost)
+
+```  
+
+
+## **Significant Inferences from the model:**  
+####_Assuming all other variables remain constant_  
+1. A higher car value (g,h,i) increases the cost.  
+2. Cost of the policy may potentially be lower for homeowners.  
+3. The cost of a policy is higher over the weekend.
+
+
+## **Predicting Cost Vector for test dataset:**  
+
+```{r}
+test_dat1_no_y = read.csv("C:/Users/sayooj/SkyDrive/Documents/UC Denver/Fall 2015/Predictive Analytics/Project1/test_dat1_no_y.csv")
+
+test_data = test_dat1_no_y
+
+dim(test_data)
+```  
+
+### **Feature-engineering for test dataset**  
+
+```{r}
+test_data$X = as.factor(test_data$X)
+test_data$customer_ID = as.factor(test_data$customer_ID)
+test_data$shopping_pt = as.factor(test_data$shopping_pt)
+test_data$record_type = as.factor(test_data$record_type)
+test_data$day = as.factor(test_data$day)
+test_data$location = as.factor(test_data$location)
+test_data$homeowner = as.factor(test_data$homeowner)
+test_data$risk_factor = as.factor(test_data$risk_factor) ##in-doubt
+test_data$married_couple = as.factor(test_data$married_couple)
+test_data$C_previous = as.factor(test_data$C_previous)
+
+test_data$weekend = as.factor(ifelse(test_data$day %in% 0:4, "N", "Y"))
+
+test_data$HH = as.integer(sub(":.*", "", test_data$time)) #get the HOUR from TIME and convert to INTEGER
+test_data$timeframe = as.factor(ifelse(test_data$HH %in% 8:17, "bus_hours","non_bus_hours"))
+
+test_data$age_diff = test_data$age_oldest-test_data$age_youngest
+
+test_data$single = as.factor(ifelse(test_data$age_diff==0 & test_data$group_size==1,
+                                     "Y", "N"))
+
+test_data$family = as.factor(ifelse(test_data$group_size >= 2 
+                                     & test_data$married_couple==1, "Y", "N"))
+
+
+test_data$family_w_kids = as.factor(ifelse(test_data$group_size > 2 
+                                            & test_data$married_couple==1 
+                                            & test_data$age_youngest<=21 , "Y", "N"))
+
+test_data$homeowner = ifelse(test_data$homeowner=="1","Y","N") 
+
+test_data$risk_factor = ifelse(test_data$risk_factor=="1",1,
+                          ifelse(test_data$risk_factor=="2",2,
+                                 ifelse(test_data$risk_factor=="3",3,
+                                        ifelse(test_data$risk_factor=="4",4,NA))))
+
+levels(test_data$C_previous) <- c("1", "2", "3", "4", "Unknown")
+test_data$C_previous[is.na(test_data$C_previous)] = "Unknown"
+test_data$duration_previous[is.na(test_data$duration_previous)] = 0
+
+
+test_data$state_cat = ifelse(test_data$state %in% c("ID","NY","FL"),"l1",
+                        ifelse(test_data$state %in% c("DC","UT","WI","CO","KY","MS","OH","TN"),"l3","l2"))
+
+test_risk <- test_data[!is.na(test_data$risk_factor), ]
+test_norisk <- test_data[is.na(test_data$risk_factor), ]
+
+test_norisk$risk_factor = round(predict(hx_lm,newdata=test_norisk))
+
+test_data_wo_NA = rbind(test_risk,test_norisk)
+
+dim(test_data_wo_NA)
+
+test_data_wo_NA$shopping_pt = as.numeric(as.character(test_data_wo_NA$shopping_pt))
+```  
+
+
+
+### **Predicting Cost function**  
+
+```{r}
+test_data_wo_NA$cost = round(predict(lm_cost,newdata=test_data_wo_NA),digits = 0)
+```  
+
+### **Export X-Cost dataframe to CSV for submission**  
+
+```{r}
+submission_csv = select(test_data_wo_NA,X,cost)
+
+write.csv(submission_csv, file="submission.csv",row.names = FALSE)
+```  
+
+
+
+
+
+
