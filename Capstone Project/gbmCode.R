@@ -60,3 +60,24 @@ if(PREDICT){
   submit <- data.frame(PassengerId = data$PassengerId, Survived = Prediction)
   write.csv(submit, file = "submission.csv", row.names = FALSE)
           }
+
+
+## Jamie's RF Stuff
+library(ElemStatLearn)
+library(MASS)
+library(randomForest)
+library(tree)
+?randomForest
+
+########### Feature Engineering #####################
+train$Survived = as.factor(train$Survived)
+levels(test$Sex) <- levels(train$Sex)
+levels(test$Embarked) <- levels(train$Embarked)
+
+rf_titanic = randomForest(Survived ~ Pclass + Sex + Fare + Age + SibSp + Parch + Embarked,
+                          data=train, ntree=2000, mtry=3, na.action=na.omit, method = "class")
+rf_predict = predict(rf_titanic, test, method ="class")
+varImpPlot(rf_titanic)
+plot(rf_titanic, log="y")
+rfsubmit <- data.frame(PassengerId = data$PassengerId, Survived = rf_predict)
+write.csv(rfsubmit, file = "rfsubmission.csv", row.names = FALSE)
